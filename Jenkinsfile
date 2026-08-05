@@ -1,44 +1,84 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: docker
+      image: docker:27-cli
+      command:
+        - cat
+      tty: true
+      volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+
+  volumes:
+    - name: docker-sock
+      hostPath:
+        path: /var/run/docker.sock
+        type: Socket
+'''
+        }
+    }
+
     environment {
         IMAGE = "docker.io/hbnu/gitops-demo"
         TAG = "${BUILD_NUMBER}"
     }
+
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/hbngoc216/gitops-demo.git'
+                checkout scm
             }
         }
+
         stage('Build Image') {
             steps {
-                sh 'docker build -t $IMAGE:$TAG .'
-            }
-        }
-        stage('Push Image') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub',
-                    usernameVariable: 'USER',
-                    passwordVariable: 'PASS')]) {
+                container('docker') {
                     sh '''
-                    echo $PASS | docker login -u $USER --password-stdin
-                    docker push $IMAGE:$TAG
+                        docker version
+                        docker build -t $IMAGE:$TAG .
                     '''
                 }
             }
         }
+
+        stage('Push Image') {
+            steps {
+                container('docker') {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'dockerhub',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                        )
+                    ]) {
+                        sh '''
+                            echo "$DOCKER_PASS" \
+                              | docker login -u "$DOCKER_USER" --password-stdin
+
+                            docker push $IMAGE:$TAG
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Update Helm') {
             steps {
-                sh """
-                sed -i 's/tag:.*/tag: ${TAG}/' chart/values.yaml
-                git config user.email "jenkins@lab.local"
-                git config user.name "jenkins"
-                git add .
-                git commit -m "Update image ${TAG}"
-                git push
-                """
+                sh '''
+                    sed -i -E 's/^([[:space:]]*tag:).*/\\1 "'"$TAG"'"/' chart/values.yaml
+
+                    git config user.email "jenkins@lab.local"
+                    git config user.name "jenkins"
+
+                    git add chart/values.yaml
+                    git commit -m "Update image ${TAG} [skip ci]" || true
+                '''
             }
         }
     }
