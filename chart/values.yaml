@@ -1,6 +1,6 @@
 image:
   repository: docker.io/hbnu/gitops-demo
-  tag: "9"
+  tag: "15"
 replicaCount: 2
 service:
   type: NodePort
