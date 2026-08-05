@@ -7,7 +7,8 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git url: 'https://github.com/hbngoc216/gitops-demo.git'
+                git branch: 'main',
+                    url: 'https://github.com/hbngoc216/gitops-demo.git'
             }
         }
         stage('Build Image') {
