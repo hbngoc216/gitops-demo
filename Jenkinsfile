@@ -68,18 +68,44 @@ spec:
             }
         }
 
-        stage('Update Helm') {
-            steps {
-                sh '''
-                    sed -i -E 's/^([[:space:]]*tag:).*/\\1 "'"$TAG"'"/' chart/values.yaml
 
-                    git config user.email "baongochuynh113@gmail.com"
-                    git config user.name "hbngoc216"
+	stage('Update Helm') {
+	    steps {
+	        withCredentials([
+	            usernamePassword(
+	                credentialsId: 'github-token',
+	                usernameVariable: 'GIT_USER',
+	                passwordVariable: 'GIT_TOKEN'
+	            )
+	        ]) {
+	            sh '''
+	                set -e
+	
+	                echo "Updating Helm image tag to ${TAG}"
+	
+	                sed -i -E \
+	                  's/^([[:space:]]*tag:).*/\\1 "'"${TAG}"'"/' \
+	                  chart/values.yaml
 
-                    git add chart/values.yaml
-                    git commit -m "Update image ${TAG} [skip ci]" || true
-                '''
-            }
-        }
+	                echo "Updated values.yaml:"
+	                grep -A3 '^image:' chart/values.yaml
+
+	                git config user.email "baongochuynh113@gmail.com"
+	                git config user.name "hbngoc216"
+
+	                git add chart/values.yaml
+
+	                git commit \
+	                  -m "Update image ${TAG} [skip ci]" \
+	                  || echo "No Helm changes to commit"
+
+	                git remote set-url origin \
+	                  "https://${GIT_USER}:${GIT_TOKEN}@github.com/hbngoc216/gitops-demo.git"
+
+	                git push origin HEAD:main
+	            '''
+	        }
+	    }
+	}
     }
 }
