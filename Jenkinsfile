@@ -24,6 +24,10 @@ spec:
         }
     }
 
+    triggers {
+        githubPush()
+    }
+
     environment {
         IMAGE = "docker.io/hbnu/gitops-demo"
         TAG = "${BUILD_NUMBER}"
@@ -39,16 +43,16 @@ spec:
         stage('Check Commit') {
             steps {
                 script {
-                    def message = sh(
+                    def commitMessage = sh(
                         script: 'git log -1 --pretty=%B',
                         returnStdout: true
                     ).trim()
 
-                    echo "Commit message: ${message}"
+                    echo "Commit message: ${commitMessage}"
 
-                    if (message.contains('[skip ci]')) {
+                    if (commitMessage.contains('[skip ci]')) {
                         currentBuild.result = 'NOT_BUILT'
-                        error('Skip Jenkins-generated GitOps commit')
+                        error('Skipping Jenkins-generated GitOps commit')
                     }
                 }
             }
@@ -59,6 +63,10 @@ spec:
                 container('docker') {
                     retry(3) {
                         sh '''
+                            set -e
+
+                            echo "Building image: $IMAGE:$TAG"
+
                             docker version
                             docker pull nginx:alpine
                             docker build -t "$IMAGE:$TAG" .
@@ -79,10 +87,16 @@ spec:
                         )
                     ]) {
                         sh '''
+                            set -e
+
                             echo "$DOCKER_PASS" |
-                              docker login -u "$DOCKER_USER" --password-stdin
+                              docker login \
+                                -u "$DOCKER_USER" \
+                                --password-stdin
 
                             docker push "$IMAGE:$TAG"
+
+                            docker logout
                         '''
                     }
                 }
@@ -101,12 +115,14 @@ spec:
                     sh '''
                         set -e
 
+                        echo "Updating Helm image tag to $TAG"
+
                         sed -i -E \
                           's/^([[:space:]]*tag:).*/\\1 "'"${TAG}"'"/' \
                           chart/values.yaml
 
-                        echo "Updated values.yaml:"
-                        grep -A3 '^image:' chart/values.yaml
+                        echo "Updated chart/values.yaml:"
+                        grep -A4 '^image:' chart/values.yaml
 
                         git config user.email "jenkins@lab.local"
                         git config user.name "jenkins"
@@ -124,6 +140,21 @@ spec:
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline completed successfully."
+            echo "Image pushed: ${IMAGE}:${TAG}"
+        }
+
+        failure {
+            echo "Pipeline failed. Check the failed stage in Console Output."
+        }
+
+        always {
+            echo "Build number: ${BUILD_NUMBER}"
         }
     }
 }
