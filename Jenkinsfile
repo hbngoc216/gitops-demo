@@ -73,8 +73,8 @@ spec:
                 sh '''
                     sed -i -E 's/^([[:space:]]*tag:).*/\\1 "'"$TAG"'"/' chart/values.yaml
 
-                    git config user.email "jenkins@lab.local"
-                    git config user.name "jenkins"
+                    git config user.email "baongochuynh113@gmail.com"
+                    git config user.name "hbngoc216"
 
                     git add chart/values.yaml
                     git commit -m "Update image ${TAG} [skip ci]" || true
