@@ -1,0 +1,7 @@
+image:
+  repository: docker.io/hbngoc216/gitops-demo
+  tag: v1
+replicaCount: 2
+service:
+  type: NodePort
+  port: 80
