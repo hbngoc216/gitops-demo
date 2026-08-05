@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        IMAGE = "docker.io/hbngoc216/gitops-demo"
+        IMAGE = "docker.io/hbnu/gitops-demo"
         TAG = "${BUILD_NUMBER}"
     }
     stages {

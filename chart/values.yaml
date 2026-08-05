@@ -1,5 +1,5 @@
 image:
-  repository: docker.io/hbngoc216/gitops-demo
+  repository: docker.io/hbnu/gitops-demo
   tag: v1
 replicaCount: 2
 service:
