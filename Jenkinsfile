@@ -36,29 +36,34 @@ spec:
             }
         }
 
-		stage('Check Commit') {
-			steps {
-				script {
-					def message = sh(
-						script: 'git log -1 --pretty=%B',
-						returnStdout: true
-					).trim()
+        stage('Check Commit') {
+            steps {
+                script {
+                    def message = sh(
+                        script: 'git log -1 --pretty=%B',
+                        returnStdout: true
+                    ).trim()
 
-					if (message.contains('[skip ci]')) {
-						currentBuild.result = 'NOT_BUILT'
-						error('Skipping Jenkins-generated commit')
-					}
-				}
-			}
-		}
+                    echo "Commit message: ${message}"
+
+                    if (message.contains('[skip ci]')) {
+                        currentBuild.result = 'NOT_BUILT'
+                        error('Skip Jenkins-generated GitOps commit')
+                    }
+                }
+            }
+        }
 
         stage('Build Image') {
             steps {
                 container('docker') {
-                    sh '''
-                        docker version
-                        docker build -t $IMAGE:$TAG .
-                    '''
+                    retry(3) {
+                        sh '''
+                            docker version
+                            docker pull nginx:alpine
+                            docker build -t "$IMAGE:$TAG" .
+                        '''
+                    }
                 }
             }
         }
@@ -74,16 +79,15 @@ spec:
                         )
                     ]) {
                         sh '''
-                            echo "$DOCKER_PASS" \
-                              | docker login -u "$DOCKER_USER" --password-stdin
+                            echo "$DOCKER_PASS" |
+                              docker login -u "$DOCKER_USER" --password-stdin
 
-                            docker push $IMAGE:$TAG
+                            docker push "$IMAGE:$TAG"
                         '''
                     }
                 }
             }
         }
-
 
         stage('Update Helm') {
             steps {
@@ -97,8 +101,6 @@ spec:
                     sh '''
                         set -e
 
-                        echo "Updating Helm image tag to ${TAG}"
-
                         sed -i -E \
                           's/^([[:space:]]*tag:).*/\\1 "'"${TAG}"'"/' \
                           chart/values.yaml
@@ -106,14 +108,14 @@ spec:
                         echo "Updated values.yaml:"
                         grep -A3 '^image:' chart/values.yaml
 
-                        git config user.email "baongochuynh113@gmail.com"
-                        git config user.name "hbngoc216"
+                        git config user.email "jenkins@lab.local"
+                        git config user.name "jenkins"
 
                         git add chart/values.yaml
 
                         git commit \
                           -m "Update image ${TAG} [skip ci]" \
-                          || echo "No Helm changes to commit"
+                          || echo "No changes to commit"
 
                         git remote set-url origin \
                           "https://${GIT_USER}:${GIT_TOKEN}@github.com/hbngoc216/gitops-demo.git"
